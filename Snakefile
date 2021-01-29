@@ -123,10 +123,10 @@ if ALIGNER == 'lra':
        conda: "env.yml"
        threads: thread_n
        shell:
-          "lra index -ONT {input}",
+          "lra index -ONT {input}"
 
 elif ALIGNER == 'winnowmap':
-    rule index_lra:
+    rule kmer_winnowmap:
        input:
            REF = FA_REF,
        output:
@@ -135,7 +135,7 @@ elif ALIGNER == 'winnowmap':
        shell:
           """
           meryl count k=15 output merylDB {input}
-          meryl print greater-than distinct=0.9998 merylDB > repetitive_k15.txt
+          meryl print greater-than distinct=0.9998 merylDB > {output}
           """
 else:
     print("Aligner is not supported")
@@ -156,11 +156,11 @@ if ALIGNER == 'lra':
            "catfishq -r {input.FQ} | seqtk seq -A - | lra align -ONT -t {threads} {input.REF} - -p s | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
 
 else:
-    rule map_lra:
+    rule map_winnowmap:
        input:
           FQ = FQ_INPUT_DIRECTORY,
           REF = FA_REF,
-          REP15 = REP15,
+          REP15 = rules.kmer_winnowmap.output.REP15,
        output:
           BAM = "{sample}/alignment/{sample}_winnowmap.bam",
           BAI = "{sample}/alignment/{sample}_winnowmap.bam.bai"
