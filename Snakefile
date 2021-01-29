@@ -31,6 +31,8 @@ pipeline_version="2.0.2"
 ###### PARAMETERS #######
 #########################
 
+# Aligner
+ALIGNER = config.get('aligner')
 
 # INPUT BAM folder
 bam = None
@@ -46,8 +48,11 @@ if not bam:
     FQ_INPUT_DIRECTORY = os.path.join(CONFDIR, config["input_fastq"])
     if not os.path.exists(FQ_INPUT_DIRECTORY):
         print("Could not find {}".format(FQ_INPUT_DIRECTORY))
-
-    MAPPED_BAM = "{sample}/alignment/{sample}_lra.bam"
+        
+    if ALIGNER == "lra":
+        MAPPED_BAM = "{sample}/alignment/{sample}_lra.bam"
+    else:
+        MAPPED_BAM = "{sample}/alignment/{sample}_winnowmap.bam"
 else:
     MAPPED_BAM = bam
     if not os.path.exists(bam):
@@ -79,6 +84,7 @@ if config.get("target_bed"):
 
 thread_n = config.get("threads", 30)
 
+
 #########################
 ######## RULES ##########
 #########################
@@ -106,33 +112,65 @@ rule print_version:
         version = pipeline_version
     shell:
         "echo {params.version} > {output}"
+        
+        
+if ALIGNER == 'lra':
+    rule index_lra:
+       input:
+           REF = FA_REF,
+       output:
+           INDEX = FA_REF_INDEX
+       conda: "env.yml"
+       threads: thread_n
+       shell:
+          "lra index -ONT {input}",
 
+elif ALIGNER == 'winnowmap':
+    rule index_lra:
+       input:
+           REF = FA_REF,
+       output:
+           REP15 = "repetitive_k15.txt"
+       threads: thread_n
+       shell:
+          """
+          meryl count k=15 output merylDB {input}
+          meryl print greater-than distinct=0.9998 merylDB > repetitive_k15.txt
+          """
+else:
+    print("Aligner is not supported")
+    
+if ALIGNER == 'lra':
+    rule map_lra:
+       input:
+          FQ = FQ_INPUT_DIRECTORY,
+          REF = FA_REF,
+          INDEX = FA_REF_INDEX,
+       output:
+          BAM = "{sample}/alignment/{sample}_lra.bam",
+          BAI = "{sample}/alignment/{sample}_lra.bam.bai"
+       conda: "env.yml"
+       threads: thread_n
+       benchmark: "{sample}/benchmarks/map_lra_{sample}.time"
+       shell:
+           "catfishq -r {input.FQ} | seqtk seq -A - | lra align -ONT -t {threads} {input.REF} - -p s | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
 
-rule index_lra:
-   input:
-       REF = FA_REF
-   output:
-       INDEX = FA_REF_INDEX
-   conda: "env.yml"
-   threads: thread_n
-   shell:
-       "lra index -ONT {input}"
+else:
+    rule map_lra:
+       input:
+          FQ = FQ_INPUT_DIRECTORY,
+          REF = FA_REF,
+          REP15 = REP15,
+       output:
+          BAM = "{sample}/alignment/{sample}_winnowmap.bam",
+          BAI = "{sample}/alignment/{sample}_winnowmap.bam.bai"
+       conda: "env.yml"
+       threads: thread_n
+       benchmark: "{sample}/benchmarks/map_winnowmap_{sample}.time"
+       shell:
+           "catfishq -r {input.FQ} | seqtk seq -A - | winnowmap -W {input.REP15} -ax map-ont {input.REF} | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
 
-rule map_lra:
-   input:
-       FQ = FQ_INPUT_DIRECTORY,
-       REF = FA_REF,
-       INDEX = FA_REF_INDEX,
-   output:
-       BAM = "{sample}/alignment/{sample}_lra.bam",
-       BAI = "{sample}/alignment/{sample}_lra.bam.bai"
-   conda: "env.yml"
-   threads: thread_n
-   benchmark: "{sample}/benchmarks/map_lra_{sample}.time"
-   shell:
-       "catfishq -r {input.FQ} | seqtk seq -A - | lra align -ONT -t {threads} {input.REF} - -p s | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
-
-
+    
 rule call_cutesv:
     input:
         BAM = MAPPED_BAM,
