@@ -168,7 +168,7 @@ else:
        threads: thread_n
        benchmark: "{sample}/benchmarks/map_winnowmap_{sample}.time"
        shell:
-           "catfishq -r {input.FQ} | seqtk seq -A - | winnowmap -W {input.REP15} -ax map-ont {input.REF} | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
+           "winnowmap -W {input.REP15} -ax map-ont {input.REF} {input.FQ} | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
 
     
 rule call_cutesv:
