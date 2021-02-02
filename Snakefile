@@ -130,12 +130,12 @@ elif ALIGNER == 'winnowmap':
        input:
            REF = FA_REF,
        output:
-           REP15 = "repetitive_k15.txt"
+           REP15 = "{sample}_repetitive_k15.txt"
        threads: thread_n
        shell:
           """
-          meryl count k=15 output merylDB {input}
-          meryl print greater-than distinct=0.9998 merylDB > {output}
+          meryl count k=15 output {sample}_merylDB {input}
+          meryl print greater-than distinct=0.9998 {sample}_merylDB > {output}
           """
 else:
     print("Aligner is not supported")
@@ -168,7 +168,7 @@ else:
        threads: thread_n
        benchmark: "{sample}/benchmarks/map_winnowmap_{sample}.time"
        shell:
-           "winnowmap -W {input.REP15} -ax map-ont {input.REF} {input.FQ} | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
+           "catfishq -r {input.FQ} | seqtk seq -A - | winnowmap -W {input.REP15} -ax map-ont {input.REF} - | samtools addreplacerg -r \"@RG\tID:{sample}\tSM:{sample}\" - | samtools sort -@ {threads} -T {sample} -O BAM -o {output.BAM} - && samtools index -@ {threads} {output.BAM}"
 
     
 rule call_cutesv:
